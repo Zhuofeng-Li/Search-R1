@@ -66,6 +66,7 @@ class LLMGenerationManager:
             skip_special_tokens=True
         )
 
+		# TODO: update here
         responses_str = [resp.split('</search>')[0] + '</search>'
                  if '</search>' in resp 
                  else resp.split('</answer>')[0] + '</answer>'
@@ -196,7 +197,7 @@ class LLMGenerationManager:
         original_left_side = {'input_ids': initial_input_ids[:, -self.config.max_start_length:]}
         original_right_side = {'responses': initial_input_ids[:, []]}
         
-        active_mask = torch.ones(gen_batch.batch['input_ids'].shape[0], dtype=torch.bool)
+        active_mask = torch.ones(gen_batch.batch['input_ids'].shape[0], dtype=torch.bool) # [bs]
         active_num_list = [active_mask.sum().item()]
         rollings = gen_batch
 
@@ -224,7 +225,7 @@ class LLMGenerationManager:
                 responses_str, self.tokenizer.pad_token, active_mask
             )
             
-            curr_active_mask = torch.tensor([not done for done in dones], dtype=torch.bool)
+            curr_active_mask = torch.tensor([not done for done in dones], dtype=torch.bool) # [bs]
             active_mask = active_mask * curr_active_mask
             active_num_list.append(active_mask.sum().item())
 
@@ -317,13 +318,15 @@ class LLMGenerationManager:
             pad_token: Token to use for padding
             
         Returns:
-            List of observation strings
+            next_obs: List of observation strings, e.g., [<information>...</information>, <answer>...</answer>, ...]
+            dones: List of dones boolean, e.g., [1, 1, 0, ...]
         """
         cur_actions, contents = self.postprocess_predictions(predictions)
         next_obs, dones = [], []
         
         search_queries = [content for action, content in zip(cur_actions, contents) if action == 'search']
         if do_search:
+            print("SEARCH_QUERIES:", search_queries) # TODO: delete
             search_results = self.batch_search(search_queries)
             assert len(search_results) == sum([1 for action in cur_actions if action == 'search'])
         else:
@@ -339,11 +342,16 @@ class LLMGenerationManager:
                     next_obs.append('')
                     dones.append(1)
                 elif action == 'search':
-                    next_obs.append(f'\n\n<information>{search_results.pop(0).strip()}</information>\n\n')
+                    result = search_results.pop(0).strip()
+                    if result == '':
+                        next_obs.append(f'\nMy previous action is invalid. \
+If I want to call python interpreter, I should ensure that the desired result is placed inside the print function.\n') 
+                    else:
+                        next_obs.append(f'\n\n<information>{result}</information>\n\n') 
                     dones.append(0)
-                else:
+                else: 
                     next_obs.append(f'\nMy previous action is invalid. \
-If I want to search, I should put the query between <search> and </search>. \
+If I want to call python interpreter, I should put the python code between <python> and </python> and ensure that the desired result is placed inside the print function to interact with the Python interpreter. \
 If I want to give the final answer, I should put the answer between <answer> and </answer>. Let me try again.\n')
                     dones.append(0)
             
@@ -366,11 +374,13 @@ If I want to give the final answer, I should put the answer between <answer> and
                 
         for prediction in predictions:
             if isinstance(prediction, str): # for llm output
-                pattern = r'<(search|answer)>(.*?)</\1>'
+                pattern = r'<(python|answer)>(.*?)</\1>'
                 match = re.search(pattern, prediction, re.DOTALL)
                 if match:
                     content = match.group(2).strip()  # Return only the content inside the tags
                     action = match.group(1)
+                    if action == 'python': # TODO: check here
+                        action = 'search'
                 else:
                     content = ''
                     action = None
@@ -391,26 +401,29 @@ If I want to give the final answer, I should put the answer between <answer> and
             search results which is concatenated into a string
         """
         results = self._batch_search(queries)['result']
+
+        print("RESULTS:", results) # TODO: delete
         
-        return [self._passages2string(result) for result in results]
+        return [result for result in results]
 
     def _batch_search(self, queries):
+        print("SEARCH_URL:", self.config.search_url) # TODO: delete
         
-        payload = {
+        payload = { 
             "queries": queries,
             "topk": self.config.topk,
-            "return_scores": True
+            "return_scores": False
         }
         
-        return requests.post(self.config.search_url, json=payload).json()
+        return requests.post(self.config.search_url, json=payload).json() # TODO: update to python url
 
-    def _passages2string(self, retrieval_result):
-        format_reference = ''
-        for idx, doc_item in enumerate(retrieval_result):
+    # def _passages2string(self, retrieval_result):
+    #     format_reference = ''
+    #     for idx, doc_item in enumerate(retrieval_result):
             
-            content = doc_item['document']['contents']
-            title = content.split("\n")[0]
-            text = "\n".join(content.split("\n")[1:])
-            format_reference += f"Doc {idx+1}(Title: {title}) {text}\n"
+    #         content = doc_item['document']['contents']
+    #         title = content.split("\n")[0]
+    #         text = "\n".join(content.split("\n")[1:])
+    #         format_reference += f"Doc {idx+1}(Title: {title}) {text}\n" # TODO: update here
 
-        return format_reference
+    #     return format_reference

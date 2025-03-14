@@ -17,14 +17,16 @@ Note that we don't combine the main with ray_trainer as ray_trainer is used by o
 
 from verl import DataProto
 import torch
-from verl.utils.reward_score import qa_em
 from verl.trainer.ppo.ray_trainer import RayPPOTrainer
 import re
 import numpy as np
+from verl.utils.reward_score import big_math
+from pathlib import Path
+import json
 
 def _select_rm_score_fn(data_source):
-    if "nq" in data_source:
-        return qa_em.compute_score_em
+    if "big_math" in data_source:
+        return big_math.compute_score
     else:
         raise NotImplementedError
 
@@ -33,11 +35,14 @@ class RewardManager():
     """The reward manager.
     """
 
-    def __init__(self, tokenizer, num_examine, format_score=0.) -> None:
+    def __init__(self, tokenizer, num_examine, config, format_score=0.) -> None:
         self.tokenizer = tokenizer
         self.num_examine = num_examine  # the number of batches of decoded responses to print to the console
         self.format_score = format_score
-
+        self.step = 0 # for saving the data
+        self.save_dir = Path("./temp_verl_results")
+        self.save_dir.mkdir(exist_ok=True)
+        self.config = config
     def __call__(self, data: DataProto):
         """We will expand this function gradually based on the available datasets"""
 
@@ -47,7 +52,10 @@ class RewardManager():
 
         reward_tensor = torch.zeros_like(data.batch['responses'], dtype=torch.float32)
 
-        # all_scores = []
+        all_scores = []
+        all_data_sources = []
+        all_sequences = []
+        all_ground_truths = []
 
         already_print_data_sources = {}
 
@@ -86,14 +94,27 @@ class RewardManager():
             if already_print_data_sources[data_source] < self.num_examine:
                 already_print_data_sources[data_source] += 1
                 print(sequences_str)
+            
+            all_data_sources.append(data_source)
+            all_sequences.append(sequences_str)
+            all_ground_truths.append(ground_truth)
+            all_scores.append(score)
         
-        # print(f"[DEBUG] all_scores: {all_scores}")
-        # print(f"[DEBUG] all_scores shape: {np.array(all_scores).shape}")
-        # print(f"[DEBUG] all_scores mean: {np.mean(all_scores)}")
-        # print(f"[DEBUG] all_scores max: {np.max(all_scores)}")
-        # print(f"[DEBUG] all_scores min: {np.min(all_scores)}")
-        # print(f"[DEBUG] all_scores std: {np.std(all_scores)}")
-
+        if self.config.save_temp_results:
+            self.step += 1
+            step_file = self.save_dir / f"step_{self.step}.json"
+            with open(
+                step_file, "w"
+            ) as f:
+                json.dump([
+                    {
+                        "data_source": data_source,
+                        "prompt": prompt_str,
+                        "response": response_str,
+                        "ground_truth": ground_truth,
+                        "score": score
+                    } for data_source, prompt_str, response_str, ground_truth, score in zip(all_data_sources, all_sequences, all_ground_truths, all_scores)
+                ], f)
         return reward_tensor
 
 
@@ -180,10 +201,11 @@ def main_task(config):
         role_worker_mapping[Role.RewardModel] = ray.remote(RewardModelWorker)
         mapping[Role.RewardModel] = global_pool_id
 
-    reward_fn = RewardManager(tokenizer=tokenizer, num_examine=0)
+    reward_fn = RewardManager(tokenizer=tokenizer, num_examine=0, config=config)
 
     # Note that we always use function-based RM for validation
-    val_reward_fn = RewardManager(tokenizer=tokenizer, num_examine=1)
+    # val_reward_fn = RewardManager(tokenizer=tokenizer, num_examine=1) # TODO: update val
+    val_reward_fn = None
 
     resource_pool_manager = ResourcePoolManager(resource_pool_spec=resource_pool_spec, mapping=mapping)
     trainer = RayPPOTrainer(config=config,

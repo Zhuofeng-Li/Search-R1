@@ -109,30 +109,3 @@ def compute_score_em(solution_str, ground_truth, method='strict', format_score=0
         else:
             return format_score
 
-
-def compute_score_subem(solution_str, ground_truth, method='strict', format_score=0., score=1.):
-    """The scoring function for substring exact match (EM).
-
-    Args:
-        solution_str: the solution text
-        ground_truth: the ground truth
-        method: the method to extract the solution, choices are 'strict' and 'flexible'
-        format_score: the score for the format
-        score: the score for the correct answer
-    """
-    answer = extract_solution(solution_str=solution_str)
-    do_print = random.randint(1, 64) == 1
-    
-    if do_print:
-        print(f"--------------------------------")
-        print(f"Golden answers: {ground_truth['target']}")
-        print(f"Extracted answer: {answer}")
-        print(f"Solution string: {solution_str}")
-    
-    if answer is None:
-        return 0
-    else:
-        if subem_check(answer, ground_truth['target']):
-            return score
-        else:
-            return format_score

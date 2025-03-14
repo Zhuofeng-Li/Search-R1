@@ -1,10 +1,12 @@
-export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+export CUDA_VISIBLE_DEVICES=1,2,3,4,5,6
 export DATA_DIR='data/nq_search'
 
 WAND_PROJECT='Search-R1'
 
-export BASE_MODEL='meta-llama/Llama-3.2-3B'
-export EXPERIMENT_NAME=nq-search-r1-ppo-llama3.2-3b-em
+# export BASE_MODEL='Qwen/Qwen2.5-0.5B-Instruct'
+# export EXPERIMENT_NAME=nq-search-r1-ppo-Qwen/Qwen2.5-0.5B-Instruct
+# export BASE_MODEL='meta-llama/Llama-3.2-3B'
+# export EXPERIMENT_NAME=nq-search-r1-ppo-llama3.2-3b-em
 # export BASE_MODEL='meta-llama/Llama-3.2-3B-Instruct'
 # export EXPERIMENT_NAME=nq-search-r1-ppo-llama3.2-3b-it-em
 # export BASE_MODEL='meta-llama/Llama-3.1-8B'
@@ -14,18 +16,21 @@ export EXPERIMENT_NAME=nq-search-r1-ppo-llama3.2-3b-em
 
 # export BASE_MODEL='Qwen/Qwen2.5-3B'
 # export EXPERIMENT_NAME=nq-search-r1-ppo-qwen2.5-3b-em
-# export BASE_MODEL='Qwen/Qwen2.5-3B-Instruct'
-# export EXPERIMENT_NAME=nq-search-r1-ppo-qwen2.5-3b-it-em
+export BASE_MODEL='Qwen/Qwen2.5-3B-Instruct'
+export EXPERIMENT_NAME=nq-search-r1-ppo-qwen2.5-3b
 # export BASE_MODEL='Qwen/Qwen2.5-7B'
 # export EXPERIMENT_NAME=nq-search-r1-ppo-qwen2.5-7b-em
 # export BASE_MODEL='Qwen/Qwen2.5-7B-Instruct'
 # export EXPERIMENT_NAME=nq-search-r1-ppo-qwen2.5-7b-it-em
 
+
 # set -x
 export VLLM_ATTENTION_BACKEND=XFORMERS # vllm + qwen2-7b with flash_attn has some issues
 
+# max_prompt_length = (config['training']['max_start_length'] + config['training']['max_response_length'] * (config['training']['max_turns'] - 1) + config['training']['max_obs_length'] * config['training']['max_turns'])
 
 PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
+    do_search=false \
     data.train_files=$DATA_DIR/train.parquet \
     data.val_files=$DATA_DIR/test.parquet \
     data.train_data_num=null \
@@ -56,7 +61,7 @@ PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.ref.fsdp_config.param_offload=True \
     actor_rollout_ref.rollout.n_agent=1 \
     actor_rollout_ref.rollout.temperature=1 \
-    actor_rollout_ref.actor.state_masking=true \
+    actor_rollout_ref.actor.state_masking=false \
     critic.optim.lr=1e-5 \
     critic.model.use_remove_padding=True \
     critic.optim.lr_warmup_steps_ratio=0.05 \
@@ -73,7 +78,7 @@ PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
     +trainer.val_only=false \
     +trainer.val_before_train=true \
     trainer.default_hdfs_dir=null \
-    trainer.n_gpus_per_node=8 \
+    trainer.n_gpus_per_node=6 \
     trainer.nnodes=1 \
     trainer.save_freq=100 \
     trainer.test_freq=100 \
@@ -86,4 +91,4 @@ PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
     max_turns=2 \
     retriever.url="http://127.0.0.1:8000/retrieve" \
     retriever.topk=3 \
-    2>&1 | tee $EXPERIMENT_NAME.log
+    # 2>&1 | tee $EXPERIMENT_NAME.log

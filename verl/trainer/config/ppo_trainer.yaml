@@ -175,3 +175,4 @@ trainer:
 
 max_turns: 10
 do_search: true
+save_temp_results: false

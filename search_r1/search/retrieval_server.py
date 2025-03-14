@@ -148,11 +148,73 @@ class BaseRetriever:
     def batch_search(self, query_list: List[str], num: int = None, return_score: bool = False):
         return self._batch_search(query_list, num, return_score)
 
+class CodeRetriever(BaseRetriever):
+    def __init__(self, config):
+        self.config = config
+        self.retrieval_method = config.retrieval_method
+        self.topk = config.retrieval_topk
+        
+        self.index_path = config.index_path
+        self.corpus_path = config.corpus_path
+    
+ 
+    def _execute_code(self, code: str, timeout: int = 1) -> str:
+        import io
+        import sys
+        import threading
+        
+        # Create a string buffer to capture output
+        output_buffer = io.StringIO()
+        error_buffer = io.StringIO()
+
+        def target():
+            try:
+                # Redirect both stdout and stderr to our buffers
+                sys.stdout = output_buffer
+                sys.stderr = error_buffer
+                exec_globals = {}
+                exec(code, exec_globals)
+            except Exception as e:
+                error_buffer.write(f"Exception: {str(e)}")
+            finally:
+                # Ensure to restore stdout and stderr after execution
+                sys.stdout = sys.__stdout__
+                sys.stderr = sys.__stderr__
+
+        # Start a thread to run the code
+        thread = threading.Thread(target=target)
+        thread.start()
+
+        # Wait for the thread to finish or timeout
+        thread.join(timeout)
+
+        # If thread is still alive after timeout, terminate it
+        if thread.is_alive():
+            return f"Error: Code execution exceeded {timeout} seconds timeout. Please simplify the python code."
+
+        # Return the output from the code execution
+        return output_buffer.getvalue()
+
+    def _search(self, query: str): # TODO: update here
+        score = None # TODO: update here
+        result = self._execute_code(query) 
+        return result, score
+
+    def _batch_search(self, query_list: List[str], num: int = None, return_score: bool = False): # TODO: update parameter 
+        results = []
+        scores = []
+        for query in tqdm(query_list, desc='Retrieval process: '): # TODO: delete here
+            item_result, item_score = self._search(query)
+            results.append(item_result)
+            scores.append(item_score)
+        
+        return results, scores
+
 class BM25Retriever(BaseRetriever):
     def __init__(self, config):
         super().__init__(config)
         from pyserini.search.lucene import LuceneSearcher
-        self.searcher = LuceneSearcher(self.index_path)
+        self.searcher = LuceneSearcher(self.index_path) 
         self.contain_doc = self._check_contain_doc()
         if not self.contain_doc:
             self.corpus = load_corpus(self.corpus_path)
@@ -272,8 +334,8 @@ class DenseRetriever(BaseRetriever):
             return results
 
 def get_retriever(config):
-    if config.retrieval_method == "bm25":
-        return BM25Retriever(config)
+    if config.retrieval_method == "code":
+        return CodeRetriever(config)
     else:
         return DenseRetriever(config)
 
@@ -326,8 +388,8 @@ app = FastAPI()
 
 # 1) Build a config (could also parse from arguments).
 #    In real usage, you'd parse your CLI arguments or environment variables.
-config = Config(
-    retrieval_method = "e5",  # or "dense"
+config = Config( # TODO: update new args
+    retrieval_method = "code",  # or "dense"
     index_path=args.index_path,
     corpus_path=args.corpus_path,
     retrieval_topk=args.topk,
@@ -340,7 +402,7 @@ config = Config(
 )
 
 # 2) Instantiate a global retriever so it is loaded once and reused.
-retriever = get_retriever(config)
+retriever = get_retriever(config) 
 
 @app.post("/retrieve")
 def retrieve_endpoint(request: QueryRequest):
@@ -353,17 +415,17 @@ def retrieve_endpoint(request: QueryRequest):
       "return_scores": true
     }
     """
-    if not request.topk:
+    if not request.topk: # TODO: delete
         request.topk = config.retrieval_topk  # fallback to default
 
     # Perform batch retrieval
     results, scores = retriever.batch_search(
         query_list=request.queries,
-        num=request.topk,
-        return_score=request.return_scores
+        num=request.topk,  # TODO: delete
+        return_score=request.return_scores # TODO: delete
     )
     
-    # Format response
+    # Format response # TODO: update here
     resp = []
     for i, single_result in enumerate(results):
         if request.return_scores:
@@ -379,4 +441,4 @@ def retrieve_endpoint(request: QueryRequest):
 
 if __name__ == "__main__":
     # 3) Launch the server. By default, it listens on http://127.0.0.1:8000
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8091)
