@@ -158,42 +158,63 @@ class CodeRetriever(BaseRetriever):
         self.corpus_path = config.corpus_path
     
  
-    def _execute_code(self, code: str, timeout: int = 1) -> str:
+    def _execute_code(self, code: str, timeout: float = 1.0) -> str:
+        import multiprocessing
         import io
         import sys
-        import threading
+        import traceback
         
-        # Create a string buffer to capture output
-        output_buffer = io.StringIO()
-        error_buffer = io.StringIO()
+        # Create a Queue for communication between processes
+        output_queue = multiprocessing.Queue()
+        error_queue = multiprocessing.Queue()
 
-        def target():
+        def target(output_queue, error_queue):
             try:
+                # Create string buffers to capture output
+                output_buffer = io.StringIO()
+                error_buffer = io.StringIO()
+
                 # Redirect both stdout and stderr to our buffers
                 sys.stdout = output_buffer
                 sys.stderr = error_buffer
+
                 exec_globals = {}
                 exec(code, exec_globals)
             except Exception as e:
-                error_buffer.write(f"Exception: {str(e)}")
+                # 捕获异常并写入 traceback 信息
+                tb = traceback.format_exc().splitlines()
+                # 去掉 traceback 中的文件名和 exec 行
+                filtered_tb = [line for line in tb if "retrieval_server.py" not in line and "exec(" not in line]
+                error_buffer.write("\n".join(filtered_tb))
             finally:
                 # Ensure to restore stdout and stderr after execution
                 sys.stdout = sys.__stdout__
                 sys.stderr = sys.__stderr__
 
-        # Start a thread to run the code
-        thread = threading.Thread(target=target)
-        thread.start()
+                # Put the captured output and error into the queues
+                output_queue.put(output_buffer.getvalue())
+                error_queue.put(error_buffer.getvalue())
 
-        # Wait for the thread to finish or timeout
-        thread.join(timeout)
+        # Create a process to run the target function
+        process = multiprocessing.Process(target=target, args=(output_queue, error_queue))
+        process.start()
 
-        # If thread is still alive after timeout, terminate it
-        if thread.is_alive():
+        # Wait for the process to finish or timeout
+        process.join(timeout)
+
+        # If process is still alive after timeout, terminate it
+        if process.is_alive():
+            process.terminate()
             return f"Error: Code execution exceeded {timeout} seconds timeout. Please simplify the python code."
 
-        # Return the output from the code execution
-        return output_buffer.getvalue()
+        # Get the output and error from the queues
+        output = output_queue.get() if not output_queue.empty() else ""
+        error = error_queue.get() if not error_queue.empty() else ""
+
+        # Return both outputs, with error first if it exists
+        if error:
+            return f"{output}\n{error}" if output else f"{error}"
+        return output
 
     def _search(self, query: str): # TODO: update here
         score = None # TODO: update here

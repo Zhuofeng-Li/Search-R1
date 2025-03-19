@@ -40,7 +40,7 @@ class RewardManager():
         self.num_examine = num_examine  # the number of batches of decoded responses to print to the console
         self.format_score = format_score
         self.step = 0 # for saving the data
-        self.save_dir = Path("./temp_verl_results")
+        self.save_dir = Path(f"./temp_verl_results/{config.trainer.experiment_name}")
         self.save_dir.mkdir(exist_ok=True)
         self.config = config
     def __call__(self, data: DataProto):
@@ -109,11 +109,10 @@ class RewardManager():
                 json.dump([
                     {
                         "data_source": data_source,
-                        "prompt": prompt_str,
-                        "response": response_str,
+                        "sequence": sequences_str,
                         "ground_truth": ground_truth,
                         "score": score
-                    } for data_source, prompt_str, response_str, ground_truth, score in zip(all_data_sources, all_sequences, all_ground_truths, all_scores)
+                    } for data_source, sequences_str, ground_truth, score in zip(all_data_sources, all_sequences, all_ground_truths, all_scores)
                 ], f)
         return reward_tensor
 
