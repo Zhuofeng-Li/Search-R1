@@ -60,6 +60,7 @@ class RewardManager():
         all_scores = []
         all_data_sources = []
         all_sequences = []
+        all_predictions = []
         all_ground_truths = []
 
         already_print_data_sources = {}
@@ -81,7 +82,7 @@ class RewardManager():
             # decode
             sequences = torch.cat((valid_prompt_ids, valid_response_ids))
             sequences_str = self.tokenizer.decode(sequences)
-
+            extracted_model_output = big_math.extract_solution(str(sequences_str))
             ground_truth = data_item.non_tensor_batch['reward_model']['ground_truth']
 
             # select rm_score
@@ -102,6 +103,7 @@ class RewardManager():
             
             all_data_sources.append(data_source)
             all_sequences.append(sequences_str)
+            all_predictions.append(extracted_model_output)
             all_ground_truths.append(ground_truth)
             all_scores.append(score)
         
@@ -115,9 +117,10 @@ class RewardManager():
                     {
                         "data_source": data_source,
                         "sequence": sequences_str,
+                        "prediction": prediction,
                         "ground_truth": ground_truth,
                         "score": score
-                    } for data_source, sequences_str, ground_truth, score in zip(all_data_sources, all_sequences, all_ground_truths, all_scores)
+                    } for data_source, sequences_str, prediction, ground_truth, score in zip(all_data_sources, all_sequences, all_predictions, all_ground_truths, all_scores)
                 ], f)
         return reward_tensor
 

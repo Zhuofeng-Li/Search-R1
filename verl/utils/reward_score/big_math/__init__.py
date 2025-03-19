@@ -421,7 +421,6 @@ def compute_score(solution_str: str, ground_truth: dict, format_score=0., score=
         print(f"--------------------------------")
         print(f"Golden answers: {ground_truth['target']}")
         print(f"Extracted answer: {extracted_model_output}")
-        print(f"Solution string: {model_output}")
         print(f"--------------------------------") # TODO: update remove this
     
     if extracted_model_output is None:

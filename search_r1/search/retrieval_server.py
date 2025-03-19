@@ -190,26 +190,31 @@ class CodeRetriever(BaseRetriever):
                 # Ensure to restore stdout and stderr after execution
                 sys.stdout = sys.__stdout__
                 sys.stderr = sys.__stderr__
-
                 # Put the captured output and error into the queues
                 output_queue.put(output_buffer.getvalue())
                 error_queue.put(error_buffer.getvalue())
+                output_buffer.close()
+                error_buffer.close()
 
         # Create a process to run the target function
         process = multiprocessing.Process(target=target, args=(output_queue, error_queue))
         process.start()
-
-        # Wait for the process to finish or timeout
         process.join(timeout)
 
         # If process is still alive after timeout, terminate it
         if process.is_alive():
-            process.terminate()
+            process.kill()
+            process.join(0.1)
             return f"Error: Code execution exceeded {timeout} seconds timeout. Please simplify the python code."
 
         # Get the output and error from the queues
         output = output_queue.get() if not output_queue.empty() else ""
         error = error_queue.get() if not error_queue.empty() else ""
+
+        # 清理资源
+        process.close()  # 确保进程资源被释放
+        output_queue.close()
+        error_queue.close()
 
         # Return both outputs, with error first if it exists
         if error:
@@ -462,4 +467,4 @@ def retrieve_endpoint(request: QueryRequest):
 
 if __name__ == "__main__":
     # 3) Launch the server. By default, it listens on http://127.0.0.1:8000
-    uvicorn.run(app, host="0.0.0.0", port=8091)
+    uvicorn.run(app, host="0.0.0.0", port=8093)

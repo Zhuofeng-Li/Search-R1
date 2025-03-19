@@ -1,6 +1,10 @@
-from verl.utils.reward_score import big_math
+import psutil
 
-big_math.compute_score("<answer>and</answer> <answer>3</answer> <answer>0.4</answer>", {"target":"\\frac{2}{5}"}, 0, 1)
-
-
-export LD_LIBRARY_PATH=/home/zhuofeng/.local/lib/python3.10/site-packages/nvidia/cudnn/lib:$LD_LIBRARY_PATH
+port = 8091
+for conn in psutil.net_connections(kind='tcp'):
+    if conn.laddr.port == port:
+        pid = conn.pid
+        print(f"Found process with PID {pid} occupying port {port}")
+        process = psutil.Process(pid)
+        process.kill()
+        print(f"Terminated process with PID {pid}")
