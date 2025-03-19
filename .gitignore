@@ -124,3 +124,5 @@ log/
 verl_checkpoints
 
 temp_verl_results/
+
+*.log

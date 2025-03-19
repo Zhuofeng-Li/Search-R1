@@ -177,7 +177,6 @@ def _compute_response_info(batch):
 
 
 def compute_data_metrics(batch, use_critic=True):
-    # TODO: add response length
     sequence_score = batch.batch['token_level_scores'].sum(-1)
     sequence_reward = batch.batch['token_level_rewards'].sum(-1)
 
@@ -703,12 +702,7 @@ class RayPPOTrainer(object):
                 timing_raw = {}
 
                 batch: DataProto = DataProto.from_single_dict(batch_dict)
-                
-                print(f"batch size: {len(batch)}")# TODO: delete
-                
                 batch = batch.repeat(repeat_times=self.config.actor_rollout_ref.rollout.n_agent, interleave=True)
-                
-                print(f"batch size after repeat: {len(batch)}")# TODO: delete
                 # pop those keys for generation
                 gen_batch = batch.pop(batch_keys=['input_ids', 'attention_mask', 'position_ids'])
 
@@ -722,11 +716,8 @@ class RayPPOTrainer(object):
                         batch.non_tensor_batch['uid'] = np.array([str(uuid.uuid4()) for _ in range(len(batch.batch))],
                                                                 dtype=object)
                         # repeat to align with repeated responses in rollout
-                        print(f"batch size after repeat: {len(batch)}")# TODO: delete
-                        print(f"gen batch length: {len(gen_batch_output)}")# TODO: delete
                         batch = batch.repeat(repeat_times=self.config.actor_rollout_ref.rollout.n, interleave=True)
                         batch = batch.union(gen_batch_output)
-                        print(f"batch size after union: {len(batch)}")# TODO: delete
 
                 ####################
                 # Below is aLL about agents - the "LLM + forloop"
@@ -759,9 +750,7 @@ class RayPPOTrainer(object):
                                             
                         # repeat to align with repeated responses in rollout
                         batch = batch.repeat(repeat_times=self.config.actor_rollout_ref.rollout.n, interleave=True)
-                        
                         batch = batch.union(final_gen_batch_output)
-
                     ####################
                     ####################
 

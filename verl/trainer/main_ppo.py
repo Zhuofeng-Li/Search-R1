@@ -40,6 +40,11 @@ class RewardManager():
         self.num_examine = num_examine  # the number of batches of decoded responses to print to the console
         self.format_score = format_score
         self.step = 0 # for saving the data
+        # Ensure the base directory exists
+        base_dir = Path("./temp_verl_results")
+        base_dir.mkdir(exist_ok=True)  # Create base directory if it doesn't exist
+        self.save_dir = base_dir / config.trainer.experiment_name
+        self.save_dir.mkdir(exist_ok=True)  # Create experiment directory
         self.save_dir = Path(f"./temp_verl_results/{config.trainer.experiment_name}")
         self.save_dir.mkdir(exist_ok=True)
         self.config = config
