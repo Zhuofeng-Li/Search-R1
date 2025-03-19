@@ -66,9 +66,8 @@ class LLMGenerationManager:
             skip_special_tokens=True
         )
 
-		# TODO: update here
-        responses_str = [resp.split('</search>')[0] + '</search>'
-                 if '</search>' in resp 
+        responses_str = [resp.split('</python>')[0] + '</python>'
+                 if '</python>' in resp 
                  else resp.split('</answer>')[0] + '</answer>'
                  if '</answer>' in resp 
                  else resp
