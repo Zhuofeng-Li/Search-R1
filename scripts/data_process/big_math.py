@@ -100,13 +100,18 @@ if __name__ == '__main__':
     train_dataset = train_dataset.map(function=make_map_fn('train'), with_indices=True)
     # test_dataset = test_dataset.map(function=make_map_fn('test'), with_indices=True)
 
+    train_test_split = train_dataset.train_test_split(test_size=500, seed=42)
+    train_dataset = train_test_split["train"]
+    test_dataset = train_test_split["test"]
+
+    print(f"train_dataset length: {len(train_dataset)}, test_dataset length: {len(test_dataset)}")
+
     local_dir = args.local_dir
     hdfs_dir = args.hdfs_dir
 
     train_dataset.to_parquet(os.path.join(local_dir, 'train.parquet'))
-    # test_dataset.to_parquet(os.path.join(local_dir, 'test.parquet'))
+    test_dataset.to_parquet(os.path.join(local_dir, 'test.parquet'))
 
     if hdfs_dir is not None:
         makedirs(hdfs_dir)
-
         copy(src=local_dir, dst=hdfs_dir)
