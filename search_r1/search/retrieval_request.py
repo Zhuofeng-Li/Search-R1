@@ -1,7 +1,7 @@
 import requests
 
 # URL for your local FastAPI server
-url = "http://127.0.0.1:8092/retrieve"
+url = "http://127.0.0.1:8093/retrieve"
 
 # 测试用例1：正常返回 ans 变量
 test_code1 = """
@@ -43,7 +43,7 @@ print(ans)
 
 # Example payload
 payload = {
-    "queries": [test_code1] * 2048,
+    "queries": [test_code1, test_code2, test_code3, test_code4, test_code5, test_code6],
     "topk": 5,
     "return_scores": False
 }

@@ -159,42 +159,62 @@ class CodeRetriever(BaseRetriever):
     
  
     def _execute_code(self, code: str, timeout: float = 1.0) -> str:
+        import multiprocessing
         import io
         import sys
         import traceback
-        from func_timeout import func_timeout, FunctionTimedOut
+        
+        # Create a Queue for communication between processes
+        output_queue = multiprocessing.Queue()
+        error_queue = multiprocessing.Queue()
 
-        def execute(code):
-            exec_globals = {}
-            exec(code, exec_globals)
+        def target(output_queue, error_queue):
+            try:
+                # Create string buffers to capture output
+                output_buffer = io.StringIO()
+                error_buffer = io.StringIO()
 
-        try:
-            # Create string buffers to capture output
-            output_buffer = io.StringIO()
-            error_buffer = io.StringIO()
+                # Redirect both stdout and stderr to our buffers
+                sys.stdout = output_buffer
+                sys.stderr = error_buffer
 
-            # Redirect both stdout and stderr to our buffers
-            sys.stdout = output_buffer
-            sys.stderr = error_buffer
+                exec_globals = {}
+                exec(code, exec_globals)
+            except Exception as e:
+                # 捕获异常并写入 traceback 信息
+                tb = traceback.format_exc().splitlines()
+                # 去掉 traceback 中的文件名和 exec 行
+                filtered_tb = [line for line in tb if "retrieval_server.py" not in line and "exec(" not in line]
+                error_buffer.write("\n".join(filtered_tb))
+            finally:
+                # Ensure to restore stdout and stderr after execution
+                sys.stdout = sys.__stdout__
+                sys.stderr = sys.__stderr__
+                # Put the captured output and error into the queues
+                output_queue.put(output_buffer.getvalue())
+                error_queue.put(error_buffer.getvalue())
+                output_buffer.close()
+                error_buffer.close()
 
-            # Execute the code with a timeout
-            func_timeout(timeout, execute, args=(code,))
-        except FunctionTimedOut:
+        # Create a process to run the target function
+        process = multiprocessing.Process(target=target, args=(output_queue, error_queue))
+        process.start()
+        process.join(timeout)
+
+        # If process is still alive after timeout, terminate it
+        if process.is_alive():
+            process.kill()
+            process.join(0.1)
             return f"Error: Code execution exceeded {timeout} seconds timeout. Please simplify the python code."
-        except Exception as e:
-            tb = traceback.format_exc().splitlines()
-            exec_index = [i for i, line in enumerate(tb) if "exec(" in line]
-            filtered_tb = tb[exec_index[0]+1:]
-            error_buffer.write(("\n".join(filtered_tb)).strip())
-        finally:
-            # Ensure to restore stdout and stderr after execution
-            sys.stdout = sys.__stdout__
-            sys.stderr = sys.__stderr__
-            # Get the captured output and error
-            output = output_buffer.getvalue()
-            error = error_buffer.getvalue()
-            output_buffer.close()
-            error_buffer.close()
+
+        # Get the output and error from the queues
+        output = output_queue.get() if not output_queue.empty() else ""
+        error = error_queue.get() if not error_queue.empty() else ""
+
+        # 清理资源
+        process.close()  # 确保进程资源被释放
+        output_queue.close()
+        error_queue.close()
 
         # Return both outputs, with error first if it exists
         if error:

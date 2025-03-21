@@ -41,6 +41,8 @@ dependencies = [
     "tensordict",
     "transformers<4.48",
     "vllm<=0.6.3",
+    "pylatexenc",
+    "wandb",
 ]
 
 # Optional dependencies (extras_require in setup.py)
