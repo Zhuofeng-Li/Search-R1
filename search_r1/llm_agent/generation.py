@@ -156,6 +156,7 @@ class LLMGenerationManager:
             
         batch_size = active_batch.batch['input_ids'].shape[0]
         remainder = batch_size % num_gpus
+        print("BATCH_SIZE:", batch_size, "REMAINDER:", remainder, "NUM_GPUS:", num_gpus) # TODO: delete
         
         if remainder == 0:
             return self.actor_rollout_wg.generate_sequences(active_batch)
