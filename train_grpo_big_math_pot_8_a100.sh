@@ -3,6 +3,7 @@ export DATA_DIR='data/big_math'
 
 WAND_PROJECT='PoT-R1'
 
+# Note qwen2-7b with pot should set  `use_remove_padding=True` to avoid flash_attn error
 export BASE_MODEL='Qwen/Qwen2.5-7B-Instruct'
 export EXPERIMENT_NAME=pot-r1-grpo-qwen2.5-7b-Instruct
 # export BASE_MODEL='/root/.cache/modelscope/hub/models/Qwen/Qwen2.5-3B-Instruct'

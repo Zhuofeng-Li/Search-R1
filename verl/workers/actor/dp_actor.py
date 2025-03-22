@@ -91,6 +91,7 @@ class DataParallelPPOActor(BasePPOActor):
                 input_ids_rmpad_rolled = input_ids_rmpad_rolled.squeeze(0)  # ((total_nnz / sp) + pad)
 
                 # only pass input_ids and position_ids to enable flash_attn_varlen
+                # print("INPUT_IDS_RMPAD:", input_ids_rmpad) # TODO: delete
                 output = self.actor_module(input_ids=input_ids_rmpad,
                                            attention_mask=None,
                                            position_ids=position_ids_rmpad,
@@ -187,6 +188,7 @@ class DataParallelPPOActor(BasePPOActor):
 
         log_probs_lst = []
         for micro_batch in micro_batches:
+            # print("MICRO_BATCH:", micro_batch) # TODO: delete
             with torch.no_grad():
                 _, log_probs = self._forward_micro_batch(micro_batch, temperature=temperature)
             log_probs_lst.append(log_probs)

@@ -1,10 +1,10 @@
-export CUDA_VISIBLE_DEVICES=0,1
+export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
 export DATA_DIR='data/big_math'
 
 WAND_PROJECT='PoT-R1'
 
-export BASE_MODEL='Qwen/Qwen2.5-1.5B-Instruct'
-export EXPERIMENT_NAME=pot-r1-grpo-qwen2.5-1.5b-Instruct
+export BASE_MODEL='Qwen/Qwen2.5-7B-Instruct' 
+export EXPERIMENT_NAME=naive-r1-grpo-qwen2.5-7b-Instruct
 # export BASE_MODEL='/root/.cache/modelscope/hub/models/Qwen/Qwen2.5-3B-Instruct'
 # export EXPERIMENT_NAME=pot-r1-grpo-qwen2.5-3b-Instruct
 # export BASE_MODEL='Qwen/Qwen2.5-7B'
@@ -22,13 +22,13 @@ export EXPERIMENT_NAME=pot-r1-grpo-qwen2.5-1.5b-Instruct
 # set -x
 export VLLM_ATTENTION_BACKEND=XFORMERS # vllm + qwen2-7b with flash_attn has some issues
 
-ppo_micro_batch_size=8
+ppo_micro_batch_size=16
 log_prob_micro_batch_size=16
 
 
 PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
     save_temp_results=true \
-    do_search=True \
+    do_search=false \
     data.train_files=$DATA_DIR/train.parquet \
     data.val_files=$DATA_DIR/test.parquet \
     data.train_data_num=null \
@@ -36,7 +36,7 @@ PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
     data.train_batch_size=512 \
     data.val_batch_size=256 \
     data.max_prompt_length=2048 \
-    data.max_response_length=512 \
+    data.max_response_length=2048 \
     data.max_start_length=2048 \
     data.max_obs_length=512 \
     data.shuffle_train_dataloader=True \
@@ -45,7 +45,7 @@ PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.model.enable_gradient_checkpointing=true \
     actor_rollout_ref.model.use_remove_padding=True \
     actor_rollout_ref.actor.optim.lr=1e-6 \
-    actor_rollout_ref.actor.optim.lr_warmup_steps_ratio=0 \
+    actor_rollout_ref.actor.optim.lr_warmup_steps_ratio=0. \
     actor_rollout_ref.actor.use_kl_loss=true \
     actor_rollout_ref.actor.ppo_mini_batch_size=64 \
     actor_rollout_ref.actor.ppo_micro_batch_size=$ppo_micro_batch_size \
@@ -68,9 +68,9 @@ PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
     +trainer.val_only=false \
     +trainer.val_before_train=true \
     trainer.default_hdfs_dir=null \
-    trainer.n_gpus_per_node=2 \
+    trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
-    trainer.save_freq=10 \
+    trainer.save_freq=20 \
     trainer.test_freq=10 \
     trainer.project_name=$WAND_PROJECT \
     trainer.experiment_name=$EXPERIMENT_NAME \

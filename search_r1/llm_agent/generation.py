@@ -156,7 +156,7 @@ class LLMGenerationManager:
             
         batch_size = active_batch.batch['input_ids'].shape[0]
         remainder = batch_size % num_gpus
-        print("BATCH_SIZE:", batch_size, "REMAINDER:", remainder, "NUM_GPUS:", num_gpus) # TODO: delete
+        # print("BATCH_SIZE:", batch_size, "REMAINDER:", remainder, "NUM_GPUS:", num_gpus) # TODO: delete
         
         if remainder == 0:
             return self.actor_rollout_wg.generate_sequences(active_batch)
@@ -172,6 +172,7 @@ class LLMGenerationManager:
 
         padded_active_batch = DataProto.from_dict(padded_batch)
 
+        # print("PADDED_ACTIVE_BATCH:", padded_active_batch) # TODO: delete
         # Generate with padded batch
         padded_output = self.actor_rollout_wg.generate_sequences(padded_active_batch)
         

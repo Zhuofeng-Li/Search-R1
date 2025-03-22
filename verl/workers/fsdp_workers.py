@@ -445,14 +445,15 @@ class ActorRolloutRefWorker(Worker):
         prompts.meta_info.update(meta_info)
         with self.rollout_sharding_manager:
             log_gpu_memory_usage('After entering rollout sharding manager', logger=logger)
-
+            # print("PROMPTS:", prompts) # TODO: delete
             prompts = self.rollout_sharding_manager.preprocess_data(prompts)
+            # print("PROMPTS:", prompts) # TODO: delete
             output = self.rollout.generate_sequences(prompts=prompts)
 
             log_gpu_memory_usage('After rollout generation', logger=logger)
 
             output = self.rollout_sharding_manager.postprocess_data(output)
-
+            # print("OUTPUT:", output) # TODO: delete
         if self._is_actor and recompute_log_prob:
             # we should always recompute old_log_probs when it is HybridEngine
             output.meta_info['micro_batch_size'] = self.config.rollout.log_prob_micro_batch_size
@@ -461,7 +462,9 @@ class ActorRolloutRefWorker(Worker):
             output.meta_info['temperature'] = self.config.rollout.temperature
             # perform recompute log_prob
             with self.ulysses_sharding_manager:
+                # print("OUTPUT:", output, "micro_batch_size:", self.config.rollout.log_prob_micro_batch_size) # TODO: delete
                 output = self.ulysses_sharding_manager.preprocess_data(output)
+                # print("OUTPUT:", output) # TODO: delete
                 old_log_probs = self.actor.compute_log_prob(data=output)
                 output.batch['old_log_probs'] = old_log_probs
                 output = self.ulysses_sharding_manager.postprocess_data(output)
