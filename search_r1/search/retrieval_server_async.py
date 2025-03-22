@@ -1,3 +1,5 @@
+import anyio
+import asyncer
 import json
 import os
 import warnings
@@ -145,8 +147,8 @@ class BaseRetriever:
     def search(self, query: str, num: int = None, return_score: bool = False):
         return self._search(query, num, return_score)
     
-    def batch_search(self, query_list: List[str], num: int = None, return_score: bool = False):
-        return self._batch_search(query_list, num, return_score)
+    async def batch_search(self, query_list: List[str], num: int = None, return_score: bool = False):
+        return await self._batch_search(query_list, num, return_score)
 
 class CodeRetriever(BaseRetriever):
     def __init__(self, config):
@@ -162,6 +164,8 @@ class CodeRetriever(BaseRetriever):
         import io
         import sys
         import traceback
+        import asyncio  # Import asyncio
+        from asyncer import asyncify
         from func_timeout import func_timeout, FunctionTimedOut
 
         def execute(code):
@@ -177,9 +181,8 @@ class CodeRetriever(BaseRetriever):
             sys.stdout = output_buffer
             sys.stderr = error_buffer
 
-            # Execute the code with a timeout
             func_timeout(timeout, execute, args=(code,))
-        except FunctionTimedOut:
+        except FunctionTimedOut:  # Handle asyncio timeout
             return f"Error: Code execution exceeded {timeout} seconds timeout. Please simplify the python code."
         except Exception as e:
             tb = traceback.format_exc().splitlines()
@@ -201,19 +204,38 @@ class CodeRetriever(BaseRetriever):
             return f"{output}\n{error}" if output else f"{error}"
         return output
 
-    def _search(self, query: str): # TODO: update here
+    def _search(self, query: str): 
         score = None # TODO: update here
         result = self._execute_code(query) 
-        return result, score
+        result_dict = {query: result}
+        return result_dict, score
 
-    def _batch_search(self, query_list: List[str], num: int = None, return_score: bool = False): # TODO: update parameter 
-        results = []
-        scores = []
-        for query in tqdm(query_list, desc='Retrieval process: '): # TODO: delete here
-            item_result, item_score = self._search(query)
-            results.append(item_result)
-            scores.append(item_score)
+    async def _batch_search(self, query_list: List[str], num: int = None, return_score: bool = False): # TODO: update parameter 
+        from asyncer import asyncify
+        qa_dict = {}
         
+        async with asyncer.create_task_group() as task_group:
+            soon_values = []
+            for query in query_list:
+                soon_value = task_group.soonify(asyncify(self._search))(query)  # Schedule the search for each query
+                soon_values.append(soon_value)
+        results, scores = await asyncify(self.reorder)(query_list, soon_values)
+        
+        return results, scores
+
+    def reorder(self, query_list, soon_values):
+        qa_dict = {}
+        scores = []
+        for soon_value in soon_values:
+            qa, score = soon_value.value
+            for query, result in qa.items():
+                qa_dict[query] = result
+            scores.append(score)
+
+        results = []
+        for query in query_list: # sync for loop 
+            result = qa_dict[query]
+            results.append(result)
         return results, scores
 
 class BM25Retriever(BaseRetriever):
@@ -411,7 +433,7 @@ config = Config( # TODO: update new args
 retriever = get_retriever(config) 
 
 @app.post("/retrieve")
-def retrieve_endpoint(request: QueryRequest):
+async def retrieve_endpoint(request: QueryRequest):
     """
     Endpoint that accepts queries and performs retrieval.
     Input format:
@@ -425,7 +447,7 @@ def retrieve_endpoint(request: QueryRequest):
         request.topk = config.retrieval_topk  # fallback to default
 
     # Perform batch retrieval
-    results, scores = retriever.batch_search(
+    results, scores = await retriever.batch_search(
         query_list=request.queries,
         num=request.topk,  # TODO: delete
         return_score=request.return_scores # TODO: delete

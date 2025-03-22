@@ -1,4 +1,4 @@
-export CUDA_VISIBLE_DEVICES=0,1
+export CUDA_VISIBLE_DEVICES=5,7
 export DATA_DIR='data/big_math'
 
 WAND_PROJECT='PoT-R1'
@@ -22,8 +22,8 @@ export EXPERIMENT_NAME=pot-r1-grpo-qwen2.5-1.5b-Instruct
 # set -x
 export VLLM_ATTENTION_BACKEND=XFORMERS # vllm + qwen2-7b with flash_attn has some issues
 
-ppo_micro_batch_size=8
-log_prob_micro_batch_size=16
+ppo_micro_batch_size=16
+log_prob_micro_batch_size=32
 
 
 PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
@@ -79,6 +79,6 @@ PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
     trainer.default_hdfs_dir=null \
     trainer.default_local_dir=verl_checkpoints/$EXPERIMENT_NAME \
     max_turns=2 \
-    retriever.url="http://127.0.0.1:8093/retrieve" \
+    retriever.url="http://127.0.0.1:8094/retrieve" \
     retriever.topk=3 \
     2>&1 | tee $EXPERIMENT_NAME.log
