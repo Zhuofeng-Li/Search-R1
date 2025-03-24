@@ -93,7 +93,7 @@ def apply_kl_penalty(data: DataProto, kl_ctrl: core_algos.AdaptiveKLController, 
     response_length = responses.size(1)
     token_level_scores = data.batch['token_level_scores']
     batch_size = data.batch.batch_size[0]
-    attention_mask = data.batch['attention_mask']
+    attention_mask = data.batch['info_mask']
     response_mask = attention_mask[:, -response_length:]
 
     # compute kl between ref_policy and current policy
@@ -259,21 +259,21 @@ def compute_data_metrics(batch, use_critic=True):
             torch.min(prompt_length).detach().item(),
         'prompt_length/clip_ratio':
             torch.mean(torch.eq(prompt_length, max_prompt_length).float()).detach().item(),
-
-        # metrics for actions
-        # 'metric/total_env':
-        #     int(np.array(batch.non_tensor_batch['total_env'], dtype=np.int16).sum()),
-        # 'metric/finished_env':
-        #     int(np.array(batch.non_tensor_batch['finished_env'], dtype=np.int16).sum()),
-        # 'metric/traj_length':
-        #     float(np.array(batch.non_tensor_batch['traj_length'], dtype=np.int16).mean()),
-        # 'metric/valid_action':
-        #     float(np.array(batch.non_tensor_batch['valid_action'], dtype=np.int16).mean()),
-        # 'metric/effective_action':
-        #     float(np.array(batch.non_tensor_batch['effective_action'], dtype=np.int16).mean()),
-        # 'metric/effective_action_ratio':
-        #     float(np.array(batch.non_tensor_batch['effective_action_ratio'], dtype=np.float32).mean()),
     }
+
+    # metrics for actions
+    if 'turns_stats' in batch.meta_info:
+        metrics['env/number_of_actions/mean'] = float(np.array(batch.meta_info['turns_stats'], dtype=np.int16).mean())
+        metrics['env/number_of_actions/max'] = float(np.array(batch.meta_info['turns_stats'], dtype=np.int16).max())
+        metrics['env/number_of_actions/min'] = float(np.array(batch.meta_info['turns_stats'], dtype=np.int16).min())
+    if 'active_mask' in batch.meta_info:
+        metrics['env/finish_ratio'] = 1 - float(np.array(batch.meta_info['active_mask'], dtype=np.int16).mean())
+    if 'valid_action_stats' in batch.meta_info:
+        metrics['env/number_of_valid_action'] = float(np.array(batch.meta_info['valid_action_stats'], dtype=np.int16).mean())
+        metrics['env/ratio_of_valid_action'] = float((np.array(batch.meta_info['valid_action_stats'], dtype=np.int16) / np.array(batch.meta_info['turns_stats'], dtype=np.int16)).mean())
+    if 'valid_search_stats' in batch.meta_info:
+        metrics['env/number_of_valid_search'] = float(np.array(batch.meta_info['valid_search_stats'], dtype=np.int16).mean())
+
 
     return metrics
 
@@ -523,11 +523,7 @@ class RayPPOTrainer(object):
                     
                     # evaluate using reward_function
                     # for certain reward function (e.g. sandbox), the generation can overlap with reward
-                    try:
-                        reward_tensor = self.val_reward_fn(test_batch)
-                    except:
-                        print(test_batch)
-                        exit()
+                    reward_tensor = self.val_reward_fn(test_batch)
 
                     reward_tensor_lst.append(reward_tensor)
                     data_source_lst.append(test_batch.non_tensor_batch.get('data_source', ['unknown'] * reward_tensor.shape[0]))
@@ -738,15 +734,12 @@ class RayPPOTrainer(object):
                             final_gen_batch_output.batch[key] = final_gen_batch_output.batch[key].long()
 
                         with torch.no_grad():
-                            try:
-                                output = self.actor_rollout_wg.compute_log_prob(final_gen_batch_output)
-                                final_gen_batch_output = final_gen_batch_output.union(output)
-                            except:
-                                print('############### here ###################')
-                                print(final_gen_batch_output)
+                            output = self.actor_rollout_wg.compute_log_prob(final_gen_batch_output)
+                            final_gen_batch_output = final_gen_batch_output.union(output)
 
-                        batch.non_tensor_batch['uid'] = np.array([str(uuid.uuid4()) for _ in range(len(batch.batch))],
-                                                                dtype=object)
+                        # batch.non_tensor_batch['uid'] = np.array([str(uuid.uuid4()) for _ in range(len(batch.batch))],
+                        #                                         dtype=object)
+                        batch.non_tensor_batch['uid'] = batch.non_tensor_batch['index'].copy()
                                             
                         # repeat to align with repeated responses in rollout
                         batch = batch.repeat(repeat_times=self.config.actor_rollout_ref.rollout.n, interleave=True)
@@ -770,12 +763,8 @@ class RayPPOTrainer(object):
                     if self.use_reference_policy:
                         # compute reference log_prob
                         with _timer('ref', timing_raw):
-                            try:
-                                ref_log_prob = self.ref_policy_wg.compute_ref_log_prob(batch)
-                                batch = batch.union(ref_log_prob)
-                            except:
-                                print('################## herehere ################')
-                                print(batch)
+                            ref_log_prob = self.ref_policy_wg.compute_ref_log_prob(batch)
+                            batch = batch.union(ref_log_prob)
 
                     # compute values
                     if self.use_critic:
@@ -864,50 +853,8 @@ class RayPPOTrainer(object):
         response_length = batch.batch['responses'].shape[-1]
         response_mask = batch.batch['attention_mask'][:, -response_length:]
         
-        # Initialize state mask
-        state_mask = torch.ones_like(response_mask)
-        
-        responses = [self.tokenizer.decode(resp, skip_special_tokens=False) for resp in batch.batch['responses']]
-    
-        for i, response in enumerate(responses):
-            # Find all pairs of start and end marker positions
-            start_marker = self.config.algorithm.state_masking.start_state_marker
-            end_marker = self.config.algorithm.state_masking.end_state_marker   
-            
-            # Get all start and end positions
-            start_positions = [m.start() for m in re.finditer(re.escape(start_marker), response)]
-            end_positions = [m.start() + len(end_marker) for m in re.finditer(re.escape(end_marker), response)]
-            
-            # Convert character positions to token positions
-            for start, end in zip(start_positions, end_positions):
-                prefix_to_start = response[:start]
-                state_section = response[start:end]
-                
-                start_tokens = self.tokenizer.encode(prefix_to_start, add_special_tokens=False)
-                state_tokens = self.tokenizer.encode(state_section, add_special_tokens=False)
-                
-                start_token_pos = len(start_tokens)
-                end_token_pos = start_token_pos + len(state_tokens)
-                
-                state_mask[i, start_token_pos:end_token_pos] = 0
-        
-        loss_mask = state_mask * response_mask
+        loss_mask = batch.batch['info_mask'][:, -response_length:]
         batch.batch['loss_mask'] = loss_mask
-        
-        # # Debug print
-        # print("\nRaw batch[0] (before masking):\n", self.tokenizer.decode(batch.batch['responses'][0]))
-        # response_ids = batch.batch['responses'][0]
-        # unmasked_ids = response_ids[loss_mask[0] == 0]
-        # print("\nMasked batch[0] (after masking):\n", self.tokenizer.decode(unmasked_ids))
-        
-        # masked_ids = response_ids[loss_mask[0] == 1]
-        # print("\nUnmasked batch[0] (masked parts):\n", self.tokenizer.decode(masked_ids))
-        
-        # masked_ids = response_ids[response_mask[0] == 1]
-        # print("\nresponse_mask[0] == 1:\n", self.tokenizer.decode(masked_ids))
-        
-        # masked_ids = response_ids[response_mask[0] == 0]
-        # print("\nresponse_mask[0] == 0:\n", self.tokenizer.decode(masked_ids))
 
         metrics.update({
             'state_tokens/total': loss_mask.sum().item(),
