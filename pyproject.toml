@@ -43,6 +43,7 @@ dependencies = [
     "vllm<=0.6.3",
     "pylatexenc",
     "wandb",
+    "faiss-gpu"
 ]
 
 # Optional dependencies (extras_require in setup.py)

@@ -44,7 +44,12 @@ write Python code inside <python> and </python> to call the Python interpreter, 
 The output of the print function or any error message will be captured and returned from the Python interpreter between <information> and </information>.
 You can use the Python interpreter as many times as necessary. 
 If no further calculations or logical operations are required, provide the final answer directly inside <answer> and </answer> without detailed explanations. 
-For example: <answer>42</answer> Question: {question}\n""" # TODO: update: add no python interpreter version
+For example: <answer>42</answer> Question: {question}\n"""
+    elif template_type == 'no_python':
+        prefix = f"""Answer the following question. Let's think step by step.
+You must conduct reasoning inside <think> and </think>. 
+If no further calculations or logical operations are required, provide the final answer directly inside <answer> and </answer> without detailed explanations. 
+For example: <answer>42</answer> Question: {question}\n"""
     else:
         raise NotImplementedError
     return prefix

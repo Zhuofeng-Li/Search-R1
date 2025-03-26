@@ -188,7 +188,7 @@ class CodeRetriever(BaseRetriever):
                 # 捕获异常并写入 traceback 信息
                 tb = traceback.format_exc().splitlines()
                 # 去掉 traceback 中的文件名和 exec 行
-                filtered_tb = [line for line in tb if "retrieval_server.py" not in line and "exec(" not in line]
+                filtered_tb = [line for line in tb if "retrieval_server" not in line and "exec(" not in line]
                 error_buffer.write("\n".join(filtered_tb))
             finally:
                 # Ensure to restore stdout and stderr after execution

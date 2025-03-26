@@ -2,7 +2,7 @@ import requests
 import random
 
 # URL for your local FastAPI server
-url = "http://127.0.0.1:8094/retrieve"
+url = "http://127.0.0.1:8091/retrieve"
 
 # 测试用例1：正常返回 ans 变量并打印输出
 test_code1 = """
