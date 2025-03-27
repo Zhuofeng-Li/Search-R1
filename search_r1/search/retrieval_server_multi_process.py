@@ -125,6 +125,10 @@ class Encoder:
 
         query_emb = query_emb.detach().cpu().numpy()
         query_emb = query_emb.astype(np.float32, order="C")
+        
+        del inputs, output
+        torch.cuda.empty_cache()
+
         return query_emb
 
 class BaseRetriever:
@@ -184,7 +188,7 @@ class CodeRetriever(BaseRetriever):
                 # 捕获异常并写入 traceback 信息
                 tb = traceback.format_exc().splitlines()
                 # 去掉 traceback 中的文件名和 exec 行
-                filtered_tb = [line for line in tb if "retrieval_server.py" not in line and "exec(" not in line]
+                filtered_tb = [line for line in tb if "retrieval_server" not in line and "exec(" not in line]
                 error_buffer.write("\n".join(filtered_tb))
             finally:
                 # Ensure to restore stdout and stderr after execution
@@ -209,6 +213,8 @@ class CodeRetriever(BaseRetriever):
 
         # Get the output and error from the queues
         output = output_queue.get() if not output_queue.empty() else ""
+        output = output.encode('UTF-8','ignore').decode('UTF-8')
+
         error = error_queue.get() if not error_queue.empty() else ""
 
         # 清理资源
@@ -292,68 +298,6 @@ class BM25Retriever(BaseRetriever):
             item_result, item_score = self._search(query, num, True)
             results.append(item_result)
             scores.append(item_score)
-        if return_score:
-            return results, scores
-        else:
-            return results
-
-class DenseRetriever(BaseRetriever):
-    def __init__(self, config):
-        super().__init__(config)
-        self.index = faiss.read_index(self.index_path)
-        if config.faiss_gpu:
-            co = faiss.GpuMultipleClonerOptions()
-            co.useFloat16 = True
-            co.shard = True
-            self.index = faiss.index_cpu_to_all_gpus(self.index, co=co)
-
-        self.corpus = load_corpus(self.corpus_path)
-        self.encoder = Encoder(
-            model_name = self.retrieval_method,
-            model_path = config.retrieval_model_path,
-            pooling_method = config.retrieval_pooling_method,
-            max_length = config.retrieval_query_max_length,
-            use_fp16 = config.retrieval_use_fp16
-        )
-        self.topk = config.retrieval_topk
-        self.batch_size = config.retrieval_batch_size
-
-    def _search(self, query: str, num: int = None, return_score: bool = False):
-        if num is None:
-            num = self.topk
-        query_emb = self.encoder.encode(query)
-        scores, idxs = self.index.search(query_emb, k=num)
-        idxs = idxs[0]
-        scores = scores[0]
-        results = load_docs(self.corpus, idxs)
-        if return_score:
-            return results, scores.tolist()
-        else:
-            return results
-
-    def _batch_search(self, query_list: List[str], num: int = None, return_score: bool = False):
-        if isinstance(query_list, str):
-            query_list = [query_list]
-        if num is None:
-            num = self.topk
-        
-        results = []
-        scores = []
-        for start_idx in tqdm(range(0, len(query_list), self.batch_size), desc='Retrieval process: '):
-            query_batch = query_list[start_idx:start_idx + self.batch_size]
-            batch_emb = self.encoder.encode(query_batch)
-            batch_scores, batch_idxs = self.index.search(batch_emb, k=num)
-            batch_scores = batch_scores.tolist()
-            batch_idxs = batch_idxs.tolist()
-
-            # load_docs is not vectorized, but is a python list approach
-            flat_idxs = sum(batch_idxs, [])
-            batch_results = load_docs(self.corpus, flat_idxs)
-            # chunk them back
-            batch_results = [batch_results[i*num : (i+1)*num] for i in range(len(batch_idxs))]
-            
-            results.extend(batch_results)
-            scores.extend(batch_scores)
         if return_score:
             return results, scores
         else:
@@ -467,4 +411,4 @@ def retrieve_endpoint(request: QueryRequest):
 
 if __name__ == "__main__":
     # 3) Launch the server. By default, it listens on http://127.0.0.1:8000
-    uvicorn.run(app, host="0.0.0.0", port=8093)
+    uvicorn.run(app, host="0.0.0.0", port=8091)
