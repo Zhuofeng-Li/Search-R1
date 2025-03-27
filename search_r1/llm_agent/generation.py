@@ -464,15 +464,13 @@ If I want to give the final answer, I should put the answer between <answer> and
         return [result for result in results]
 
     def _batch_search(self, queries):
-        print("SEARCH_URL:", self.config.search_url) # TODO: delete
-        
         payload = { 
             "queries": queries,
             "topk": self.config.topk,
             "return_scores": False
         }
         
-        return requests.post(self.config.search_url, json=payload).json() # TODO: update to python url
+        return requests.post(self.config.search_url, json=payload).json() 
 
     # def _passages2string(self, retrieval_result):
     #     format_reference = ''
@@ -481,6 +479,6 @@ If I want to give the final answer, I should put the answer between <answer> and
     #         content = doc_item['document']['contents']
     #         title = content.split("\n")[0]
     #         text = "\n".join(content.split("\n")[1:])
-    #         format_reference += f"Doc {idx+1}(Title: {title}) {text}\n" # TODO: update here
+    #         format_reference += f"Doc {idx+1}(Title: {title}) {text}\n" 
 
     #     return format_reference

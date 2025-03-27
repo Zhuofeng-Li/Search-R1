@@ -519,8 +519,7 @@ class RayPPOTrainer(object):
                     test_batch = test_batch.union(final_gen_batch_output)
                     
                     for key in test_batch.batch.keys():
-                        test_batch.batch[key] = test_batch.batch[key].long()
-                    
+                        test_batch.batch[key] = test_batch.batch[key].long()                                        
                     # evaluate using reward_function
                     # for certain reward function (e.g. sandbox), the generation can overlap with reward
                     reward_tensor = self.val_reward_fn(test_batch)
