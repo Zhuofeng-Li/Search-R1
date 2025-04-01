@@ -23,10 +23,13 @@ import numpy as np
 from verl.utils.reward_score import big_math
 from pathlib import Path
 import json
+from verl.utils.reward_score import hf_math_verify
 
 def _select_rm_score_fn(data_source):
     if "big_math" in data_source:
         return big_math.compute_score
+    elif "simplelr" in data_source:
+        return hf_math_verify.compute_score 
     else:
         raise NotImplementedError
 
@@ -89,7 +92,10 @@ class RewardManager():
             data_source = data_item.non_tensor_batch['data_source']
             compute_score_fn = _select_rm_score_fn(data_source)
 
-            score = compute_score_fn(solution_str=sequences_str, ground_truth=ground_truth, format_score=self.format_score)
+            if "simplelr" in data_source:
+                score = compute_score_fn(solution_str=sequences_str, ground_truth=all_ground_truths)['score']
+            else:
+                score = compute_score_fn(solution_str=sequences_str, ground_truth=ground_truth, format_score=self.format_score)
 
             reward_tensor[i, valid_response_length - 1] = score
             # all_scores.append(score)
